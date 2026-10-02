@@ -2,3 +2,12 @@
 build/
 sdkconfig
 sdkconfig.old
+
+# Python and local development state
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.ruff_cache/
+.local/

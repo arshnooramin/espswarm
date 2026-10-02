@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "virtual-esp"
+version = "0.1.0.dev0"
+description = "Python library for controlling ESP32 boards over MQTT"
+readme = "README.md"
+requires-python = ">=3.14"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Hardware",
+]
+
+[project.urls]
+Repository = "https://github.com/arshnooramin/virtual-esp"
+
+[project.optional-dependencies]
+dev = ["build>=1.2,<2", "ruff>=0.14,<1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+virtual_esp = ["py.typed"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

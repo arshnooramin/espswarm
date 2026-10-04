@@ -2,6 +2,8 @@
 build/
 sdkconfig
 sdkconfig.old
+firmware/config.json
+firmware/broker-ca.*
 
 # Python and local development state
 .venv/

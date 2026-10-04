@@ -1,0 +1,15 @@
+{
+  "wifi_ssid": "your-network",
+  "wifi_password": "your-password",
+  "mqtt_host": "192.168.1.10",
+  "mqtt_port": 1883,
+  "mqtt_username": null,
+  "mqtt_password": null,
+  "mqtt_tls": false,
+  "mqtt_ca_file": "broker-ca.pem",
+  "ntp_host": "pool.ntp.org",
+  "board_id": null,
+  "wifi_timeout": 20,
+  "socket_timeout": 5,
+  "keepalive": 30
+}

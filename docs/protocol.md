@@ -87,9 +87,16 @@ broker publishes the identical message with `"online": false` as the last will.
 | `gpio.watch` | `pin`, `edge` (`rising`/`falling`/`any`) | `{}` | `invalid_state` unless input, `busy` if watched |
 | `gpio.unwatch` | `pin` | `{}` | |
 | `gpio.reset` | `pin` | `{}`; stops watching, input without pull | |
+| `neopixel.write` | `pin`, `colors` (1–64 `[r, g, b]`, 0–255) | `{}` | `invalid_args` |
 
-Usable pins: 0, 2, 4, 5, 12–15, 18, 19, 21–23, 25–27, 32–39. Pins 34–39 are
-input-only and have no pulls. Others are reserved for flash, console or PSRAM.
+Usable pins depend on the chip, reported as `target` in the status:
+
+| Target | Usable pins | Notes |
+| --- | --- | --- |
+| `esp32` | 0, 2, 4, 5, 12–15, 18, 19, 21–23, 25–27, 32–39 | 34–39 input-only, no pulls |
+| `esp32s2` | 0–18, 21, 33–42 | Reserved: flash/PSRAM 26–32, USB 19/20, console 43/44, strapping 45/46 |
+
+Other pins are refused with `invalid_args` before any hardware access.
 
 ## Sessions
 
@@ -252,15 +259,18 @@ while the board is offline are not delivered later; they time out.
 
 ```mermaid
 flowchart LR
-    IRQ[Hard IRQ on pin edge] -->|pin, level| Q[16-entry ring buffer]
+    IRQ[Pin IRQ, scheduled callback] -->|pin, level| Q[16-entry ring buffer]
     Q -->|≤ 16 per loop| Loop[Main loop]
     Loop -->|QoS 0| T[events/gpio]
 ```
 
-- The IRQ handler only writes two bytes into a preallocated buffer; it never
-  allocates or touches the network.
-- `level` is read inside the IRQ, after the edge, so fast pulses can report the
-  same level twice.
+- MicroPython's ESP32 port runs pin IRQ handlers as scheduled callbacks on the
+  main thread, shortly after the edge; there is no hard IRQ mode. The handler
+  only writes two bytes into a preallocated buffer.
+- `level` is read when the callback runs, so fast pulses can report the same
+  level twice.
+- Edges arriving faster than callbacks run can overflow MicroPython's schedule
+  queue and are lost without being counted.
 - `dropped` counts edges lost to a full buffer since the previous event,
   saturating at 65535. They have no `sequence`.
 - `sequence` increments per published event and wraps at 2³⁰. A gap means

@@ -321,6 +321,9 @@ def open_connection(settings):
     stream = socket.socket(family, kind, protocol)
     try:
         stream.settimeout(settings.socket_timeout)
+        # Send responses at once rather than after the host's delayed ACK.
+        if hasattr(socket, "TCP_NODELAY"):
+            stream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         stream.connect(addresses[0][-1])
         if settings.mqtt_tls:
             import ssl

@@ -48,13 +48,14 @@ class ResponseCache:
 
 
 class Protocol:
-    def __init__(self, board_id, session, peripherals):
+    def __init__(self, board_id, session, peripherals, target="esp32"):
         if not is_token(board_id, MAX_IDENTITY_LENGTH) or not is_token(
             session, MAX_IDENTITY_LENGTH
         ):
             raise ValueError("Invalid board identity or session")
         self.board_id = board_id
         self.session = session
+        self.target = target
         self.cache = ResponseCache()
         self.capabilities = []
         self._routes = {}
@@ -82,7 +83,7 @@ class Protocol:
     def information(self):
         return {
             "board_id": self.board_id,
-            "target": "esp32",
+            "target": self.target,
             "runtime": "micropython",
             "agent_version": AGENT_VERSION,
             "capabilities": self.capabilities,

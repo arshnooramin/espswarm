@@ -1,20 +1,24 @@
 # Board agent
 
-MicroPython 1.29.0 agent for a classic ESP32 DevKit. It connects to an existing
-MQTT broker and serves the [protocol](../docs/protocol.md). Not yet validated
-on hardware.
+MicroPython 1.29.0 agent for ESP32 and ESP32-S2 boards. It connects to an
+existing MQTT broker and serves the [protocol](../docs/protocol.md). The chip is
+detected at boot; validated on an ESP32-S2-DevKitM-1.
 
 ## Flash and deploy
 
 ```sh
 python -m pip install '.[board]'
-esptool --chip esp32 --port PORT erase-flash
-esptool --chip esp32 --port PORT write-flash 0x1000 ESP32_GENERIC-v1.29.0.bin
+esptool --chip CHIP --port PORT erase-flash
+esptool --chip CHIP --port PORT write-flash 0x1000 FIRMWARE.bin
 ```
 
-Use the [generic firmware](https://micropython.org/download/ESP32_GENERIC/) for
-WROOM boards, the SPIRAM variant for WROVER. `PORT` is e.g.
-`/dev/cu.usbserial-…` or `COM4`.
+| Board | `CHIP` | Firmware |
+| --- | --- | --- |
+| Classic ESP32 (WROOM) | `esp32` | [ESP32_GENERIC](https://micropython.org/download/ESP32_GENERIC/) (SPIRAM variant for WROVER) |
+| ESP32-S2 | `esp32s2` | [ESP32_GENERIC_S2](https://micropython.org/download/ESP32_GENERIC_S2/) |
+
+`PORT` is e.g. `/dev/cu.usbserial-…` or `COM4`. If `mip install` fails with a
+certificate error on macOS, prefix it with `SSL_CERT_FILE=/etc/ssl/cert.pem`.
 
 ```sh
 cp firmware/config.example.json firmware/config.json   # edit; Git ignores it
@@ -56,7 +60,7 @@ flowchart TD
     A -->|poll / publish| M[mqtt.MQTT]
     A -->|handle, status, event| P[protocol.Protocol]
     P -->|execute| G[gpio.GPIO]
-    G -->|hard IRQ| Q[EventQueue]
+    G -->|pin IRQ| Q[EventQueue]
     A -->|drain| Q
 ```
 
@@ -66,11 +70,14 @@ flowchart TD
 | `protocol.py` | Validation, `ResponseCache`, routing to peripherals, message encoding |
 | `peripheral.py` | `Peripheral` base: `capabilities`, an `operations` table, argument checks |
 | `gpio.py` | `GPIO` peripheral and the IRQ-safe `EventQueue` |
+| `pixels.py` | `NeoPixel` peripheral for WS2812 LEDs |
+| `targets.py` | Per-chip pin tables and chip detection |
 | `mqtt.py` | Minimal MQTT 3.1.1 client: QoS 0/1, bounded buffers, deadlines |
 | `settings.py` | `config.json` schema (`FIELDS`) |
 | `json_codec.py` | Strict JSON decoder for requests and config |
 
-Everything runs in one thread. IRQ handlers only enqueue. Unexpected exceptions
+Everything runs in one thread; pin IRQ callbacks only enqueue. Wi-Fi power
+saving is disabled, since modem sleep added up to 300 ms per request. Unexpected exceptions
 are logged and the board resets after 10 s. Credentials and payloads are never
 logged.
 

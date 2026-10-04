@@ -1,3 +1,4 @@
+import socket
 import ssl
 import threading
 from types import SimpleNamespace
@@ -9,6 +10,14 @@ from espswarm import BrokerDisconnected, ConnectionFailed, MQTTTransport
 
 SUCCESS = SimpleNamespace(is_failure=False)
 FAILURE = SimpleNamespace(is_failure=True)
+
+
+class FakeSocket:
+    def __init__(self):
+        self.options = {}
+
+    def setsockopt(self, level, option, value):
+        self.options[(level, option)] = value
 
 
 class FakeClient:
@@ -25,6 +34,7 @@ class FakeClient:
         self.tls_context = None
         self.stopped = False
         self.mid = 0
+        self.sock = FakeSocket()
 
     def username_pw_set(self, username, password):
         self.credentials = (username, password)
@@ -63,6 +73,9 @@ class FakeClient:
     def publish(self, topic, payload, qos):
         self.published.append((topic, payload, qos))
         return SimpleNamespace(rc=mqtt.MQTT_ERR_SUCCESS)
+
+    def socket(self):
+        return self.sock
 
     def is_connected(self):
         return self.connected
@@ -164,3 +177,12 @@ def test_close_stops_network_thread():
     transport.close()
     assert client.stopped
     assert not client.connected
+
+
+def test_nagle_is_disabled_on_every_connection():
+    transport, client, _ = connected_transport()
+    nodelay = (socket.IPPROTO_TCP, socket.TCP_NODELAY)
+    assert client.sock.options[nodelay] == 1
+    client.sock.options.clear()
+    client.reconnect()
+    assert client.sock.options[nodelay] == 1

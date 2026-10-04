@@ -31,7 +31,7 @@ class Pin:
             self.level = value
         return self.level
 
-    def irq(self, handler=None, trigger=0, hard=False):
+    def irq(self, handler=None, trigger=0, wake=None):
         self.handler = handler
 
 
@@ -92,7 +92,7 @@ def check_irq_queue(hardware):
         import micropython
     except ImportError:
         micropython = None
-    # The hard IRQ path must not allocate.
+    # The IRQ handler does not allocate, so bursts stay cheap.
     if micropython:
         micropython.heap_lock()
     try:

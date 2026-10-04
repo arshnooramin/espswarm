@@ -61,6 +61,24 @@ just after connecting, so use `client.board(id)` or `on_status` to wait for them
 
 All exceptions derive from `SwarmError`.
 
+**Demo:** `python examples/onboard_led.py --broker HOST --board BOARD_ID` cycles
+the on-board RGB LED (GPIO18 on the ESP32-S2-DevKitM-1); `--plain --pin 2` blinks
+a plain LED.
+
+## Broker setup
+
+Any MQTT 3.1.1 broker works. For Mosquitto, disable Nagle's algorithm; its
+default adds about 170 ms to every call:
+
+```
+listener 1883 0.0.0.0
+set_tcp_nodelay true
+allow_anonymous true   # local testing only; use accounts and ACLs otherwise
+```
+
+Measured on an ESP32-S2 over home Wi-Fi with a LAN broker: about 80 ms per call,
+most of it the board's strict JSON decoding.
+
 Calls are thread-safe. Callbacks run on a dedicated thread and may call boards.
 See the [protocol](docs/protocol.md) for operations, timeouts and failure
 handling, and the [board agent](firmware/README.md) for flashing.
@@ -72,6 +90,7 @@ handling, and the [board agent](firmware/README.md) for flashing.
 | `src/espswarm/` | Host library: `Client`, `Board`, transport, protocol encoding, errors |
 | `firmware/` | MicroPython board agent |
 | `docs/protocol.md` | Protocol specification |
+| `examples/` | Runnable demos |
 | `tests/` | `test_host_*` (library), `test_board_*` (firmware), MicroPython smoke test |
 
 ## Development

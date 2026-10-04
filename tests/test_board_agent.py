@@ -162,12 +162,18 @@ def test_close_failure_still_discards_client_and_events(agent, hardware):
 
 
 class Wlan:
+    PM_NONE = 0
+
     def __init__(self, connected=True):
         self.connected = connected
         self.disconnected = False
+        self.settings = {}
 
     def active(self, enabled):
         pass
+
+    def config(self, **settings):
+        self.settings.update(settings)
 
     def isconnected(self):
         return self.connected
@@ -277,3 +283,9 @@ def test_tls_session_syncs_clock_before_connecting(monkeypatch):
     with pytest.raises(OSError):
         supervisor._run_session()
     assert order == ["ntp", "mqtt"]
+
+
+def test_wifi_power_saving_is_disabled():
+    wlan = Wlan()
+    ConnectionSupervisor(settings(), wlan, agent=None, timer=Timer()).connect_wifi()
+    assert wlan.settings == {"pm": Wlan.PM_NONE}

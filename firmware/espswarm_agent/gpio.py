@@ -1,40 +1,12 @@
-"""Classic ESP32 GPIO and a preallocated queue for hard interrupts."""
+"""GPIO for a chip target, and a preallocated queue for pin interrupts."""
 
 from .peripheral import Peripheral
+from .targets import ESP32
 from .validation import CommandError, is_integer
 
 EVENT_QUEUE_CAPACITY = 16
 MAX_DROPPED_EVENTS = 65535
-INPUT_ONLY_PIN_START = 34
 MODES = ("input", "output")
-
-# Exclude flash, console UART, and pins potentially used by PSRAM.
-PINS = (
-    0,
-    2,
-    4,
-    5,
-    12,
-    13,
-    14,
-    15,
-    18,
-    19,
-    21,
-    22,
-    23,
-    25,
-    26,
-    27,
-    32,
-    33,
-    34,
-    35,
-    36,
-    37,
-    38,
-    39,
-)
 
 # Distinguishes an omitted output level from an explicit JSON null.
 _UNSET = object()
@@ -106,8 +78,9 @@ class GPIO(Peripheral):
         "gpio.unwatch": ("unwatch", ("pin",), ()),
     }
 
-    def __init__(self, machine):
+    def __init__(self, machine, target=ESP32):
         self.machine = machine
+        self.target = target
         self.events = EventQueue(machine)
         self._configured = {}
         pin_class = machine.Pin
@@ -122,9 +95,8 @@ class GPIO(Peripheral):
             "any": pin_class.IRQ_RISING | pin_class.IRQ_FALLING,
         }
 
-    @staticmethod
-    def _validate_pin(pin):
-        if type(pin) is not int or pin not in PINS:
+    def _validate_pin(self, pin):
+        if type(pin) is not int or pin not in self.target.pins:
             raise CommandError("invalid_args", "Pin is unavailable or reserved")
 
     @staticmethod
@@ -145,7 +117,7 @@ class GPIO(Peripheral):
             self._validate_level(initial)
         if mode not in MODES or not isinstance(pull, str) or pull not in self._pulls:
             raise CommandError("invalid_args", "Invalid mode or pull")
-        if pin >= INPUT_ONLY_PIN_START and (mode == "output" or pull != "none"):
+        if pin in self.target.input_only and (mode == "output" or pull != "none"):
             raise CommandError(
                 "invalid_args", "Pin is input-only without internal pulls"
             )
@@ -187,14 +159,15 @@ class GPIO(Peripheral):
             raise CommandError("invalid_args", "Invalid edge")
         if configured.handler is not None:
             raise CommandError("busy", "Pin is already watched")
-        # Bind locals so the hard IRQ handler does no attribute lookups.
+        # The ESP32 port runs pin IRQ handlers as scheduled callbacks on the
+        # main thread; it has no hard IRQ mode. Bound locals keep them cheap.
         enqueue = self.events.put
         read = configured.pin.value
 
         def handler(_):
             enqueue(pin, read())
 
-        configured.pin.irq(handler=handler, trigger=self._triggers[edge], hard=True)
+        configured.pin.irq(handler=handler, trigger=self._triggers[edge])
         configured.handler = handler
         return {}
 

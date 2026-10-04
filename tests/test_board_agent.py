@@ -3,16 +3,16 @@ from types import SimpleNamespace
 
 import pytest
 from board_fakes import Machine, Timer, request
-from virtual_esp_board.agent import (
+from espswarm_agent.agent import (
     EVENTS_PER_STEP,
     INITIAL_BACKOFF_MS,
     STABLE_CONNECTION_MS,
     Agent,
     ConnectionSupervisor,
 )
-from virtual_esp_board.gpio import GPIO
-from virtual_esp_board.protocol import Protocol
-from virtual_esp_board.settings import Settings
+from espswarm_agent.gpio import GPIO
+from espswarm_agent.protocol import Protocol
+from espswarm_agent.settings import Settings
 
 
 class Client:
@@ -80,7 +80,7 @@ def test_retained_commands_and_other_board_topics_have_no_effect(
     payload = request(op="gpio.configure", args={"pin": 2, "mode": "output"})
     client = Client(
         [
-            (b"virtual-esp/v1/other/request", payload, False),
+            (b"espswarm/v1/other/request", payload, False),
             (protocol.request_topic, payload, True),
         ]
     )

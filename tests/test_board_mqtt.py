@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 from board_fakes import Poller, Stream, Timer, publication
-from virtual_esp_board.mqtt import MAX_PENDING, MQTT, MQTTError, open_connection
-from virtual_esp_board.settings import Settings
+from espswarm_agent.mqtt import MAX_PENDING, MQTT, MQTTError, open_connection
+from espswarm_agent.settings import Settings
 
 
 def connection(incoming=b"", chunk_size=4096, timeout_ms=5000):
@@ -193,7 +193,7 @@ def fake_network(monkeypatch):
     monkeypatch.setitem(sys.modules, "socket", socket)
     monkeypatch.setitem(sys.modules, "ssl", ssl)
     monkeypatch.setattr(
-        "virtual_esp_board.mqtt.select",
+        "espswarm_agent.mqtt.select",
         SimpleNamespace(poll=lambda: SimpleNamespace(register=lambda *a: None)),
     )
     return sockets, wrapped

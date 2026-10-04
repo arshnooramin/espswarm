@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from virtual_esp_board.settings import MAX_CONFIG_BYTES, Settings
+from espswarm_agent.settings import MAX_CONFIG_BYTES, Settings
 
 REQUIRED = {"wifi_ssid": "home", "mqtt_host": "broker"}
 

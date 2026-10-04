@@ -10,9 +10,9 @@ import tempfile
 class TestPackage:
 
     def test_distribution_contains_typed_library_only(self):
-        distribution = importlib.metadata.distribution("virtual-esp")
+        distribution = importlib.metadata.distribution("espswarm")
         files = {str(file) for file in distribution.files or ()}
-        package = importlib.resources.files("virtual_esp")
+        package = importlib.resources.files("espswarm")
         assert package.joinpath("__init__.py").is_file()
         assert package.joinpath("py.typed").is_file()
         assert not any(file.startswith("server/") for file in files)
@@ -29,9 +29,9 @@ def reject_connection(*args, **kwargs):
 socket.socket.connect = reject_connection
 socket.socket.connect_ex = reject_connection
 before = set(threading.enumerate())
-import virtual_esp
+import espswarm
 assert set(threading.enumerate()) == before, "Import started a background thread"
-assert virtual_esp.__doc__
+assert espswarm.__doc__
 """
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(

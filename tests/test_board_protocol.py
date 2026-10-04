@@ -2,14 +2,14 @@ import json
 
 import pytest
 from board_fakes import request
-from virtual_esp_board.json_codec import loads
-from virtual_esp_board.peripheral import Peripheral
-from virtual_esp_board.protocol import (
+from espswarm_agent.json_codec import loads
+from espswarm_agent.peripheral import Peripheral
+from espswarm_agent.protocol import (
     CACHE_SIZE,
     EVENT_SEQUENCE_MODULUS,
     Protocol,
 )
-from virtual_esp_board.validation import CommandError
+from espswarm_agent.validation import CommandError
 
 
 class Hardware(Peripheral):
@@ -192,7 +192,7 @@ def test_unencodable_results_are_cached_as_errors(
 
 def test_topics_and_status_are_board_specific(protocol, hardware):
     other = Protocol("other", "boot2", [hardware])
-    assert protocol.request_topic == b"virtual-esp/v1/workbench/request"
+    assert protocol.request_topic == b"espswarm/v1/workbench/request"
     assert protocol.request_topic != other.request_topic
     status = json.loads(protocol.status(False))
     assert not status["online"]

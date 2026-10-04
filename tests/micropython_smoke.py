@@ -5,11 +5,11 @@ import sys
 
 sys.path.insert(0, "firmware")
 
-from virtual_esp_board.agent import Agent
-from virtual_esp_board.gpio import GPIO
-from virtual_esp_board.mqtt import MQTT
-from virtual_esp_board.protocol import Protocol
-from virtual_esp_board.settings import Settings
+from espswarm_agent.agent import Agent
+from espswarm_agent.gpio import GPIO
+from espswarm_agent.mqtt import MQTT
+from espswarm_agent.protocol import Protocol
+from espswarm_agent.settings import Settings
 
 
 class Pin:
@@ -111,7 +111,7 @@ def check_agent_and_transport(hardware, protocol):
     agent = Agent(protocol, hardware.events, Settings(wifi_ssid="t", mqtt_host="b"))
     agent.start(MQTT(stream, poller=Poller()))
     assert stream.sent.startswith(b"\x10")
-    assert b"virtual-esp/v1/workbench/status" in stream.sent
+    assert b"espswarm/v1/workbench/status" in stream.sent
 
     stream = Stream(b"\x40\x02\x00\x01")
     MQTT(stream, poller=Poller()).publish(b"response", b"ok")

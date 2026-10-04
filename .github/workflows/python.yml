@@ -20,7 +20,7 @@ jobs:
           python-version: '3.14'
       - run: python -m pip install ".[dev]"
       - run: ruff check .
-      - run: ruff format --check .
+      - run: black --check .
       - run: python -m build
       - name: Install built wheel
         shell: python
@@ -30,4 +30,27 @@ jobs:
           import sys
           wheel, = pathlib.Path("dist").glob("*.whl")
           subprocess.run([sys.executable, "-m", "pip", "install", "--force-reinstall", str(wheel)], check=True)
-      - run: python -m unittest discover -s tests -v
+      - run: python -m pytest
+
+  micropython:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore MicroPython 1.29.0 Unix runtime
+        id: micropython-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/micropython/ports/unix/build-standard/micropython
+            ${{ runner.temp }}/micropython/lib/micropython-lib/python-stdlib/logging
+          key: micropython-unix-v1.29.0-${{ runner.os }}
+      - name: Build MicroPython 1.29.0 Unix runtime
+        if: steps.micropython-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.29.0 https://github.com/micropython/micropython.git "$RUNNER_TEMP/micropython"
+          make -C "$RUNNER_TEMP/micropython/ports/unix" submodules
+          make -C "$RUNNER_TEMP/micropython/ports/unix" -j2 MICROPY_PY_FFI=0 MICROPY_PY_BTREE=0
+      - name: Check board code on MicroPython
+        env:
+          MICROPYPATH: "${{ runner.temp }}/micropython/lib/micropython-lib/python-stdlib/logging:"
+        run: '"$RUNNER_TEMP/micropython/ports/unix/build-standard/micropython" -X heapsize=256K tests/micropython_smoke.py'

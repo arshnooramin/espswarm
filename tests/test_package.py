@@ -5,18 +5,18 @@ import importlib.resources
 import subprocess
 import sys
 import tempfile
-import unittest
 
 
-class PackageTests(unittest.TestCase):
+class TestPackage:
+
     def test_distribution_contains_typed_library_only(self):
         distribution = importlib.metadata.distribution("virtual-esp")
         files = {str(file) for file in distribution.files or ()}
         package = importlib.resources.files("virtual_esp")
-        self.assertTrue(package.joinpath("__init__.py").is_file())
-        self.assertTrue(package.joinpath("py.typed").is_file())
-        self.assertFalse(any(file.startswith("server/") for file in files))
-        self.assertFalse(distribution.entry_points)
+        assert package.joinpath("__init__.py").is_file()
+        assert package.joinpath("py.typed").is_file()
+        assert not any(file.startswith("server/") for file in files)
+        assert not distribution.entry_points
 
     def test_import_without_checkout_or_network(self):
         script = """
@@ -41,6 +41,6 @@ assert virtual_esp.__doc__
                 text=True,
                 timeout=10,
             )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
-        self.assertEqual(result.stderr, "")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == ""
+        assert result.stderr == ""

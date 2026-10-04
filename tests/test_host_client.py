@@ -4,7 +4,7 @@ import threading
 import pytest
 from host_fakes import FakeBroker
 
-from virtual_esp import BoardOffline, Client, NotConnected
+from espswarm import BoardOffline, Client, NotConnected
 
 
 @pytest.fixture
@@ -113,7 +113,7 @@ def test_callbacks_run_off_the_network_thread_and_may_call_boards(client, broker
     client.on_status(on_status)
     broker.boards["bench-3"].go_online()
     thread_name, board_id = next_item(results)
-    assert thread_name == "virtual-esp-callbacks"
+    assert thread_name == "espswarm-callbacks"
     assert board_id == "bench-3"
 
 
@@ -133,8 +133,8 @@ def test_failing_callback_does_not_stop_later_callbacks(client, broker, caplog):
 def test_foreign_topics_and_malformed_status_are_ignored(client, broker):
     broker.subscriptions.append("#")
     broker.deliver("other/app/status", b"{}")
-    broker.deliver("virtual-esp/v1/bad id/status", b"{}")
-    broker.deliver("virtual-esp/v1/bench-9/status", b"not json")
+    broker.deliver("espswarm/v1/bad id/status", b"{}")
+    broker.deliver("espswarm/v1/bench-9/status", b"not json")
     assert [board.board_id for board in client.boards()] == [
         "bench-1",
         "bench-2",

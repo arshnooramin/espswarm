@@ -3,21 +3,24 @@ requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "virtual-esp"
+name = "espswarm"
 version = "0.1.0.dev0"
 description = "Python library for controlling ESP32 boards over MQTT"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = ["paho-mqtt>=2.1,<3"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: System :: Hardware",
 ]
 
 [project.urls]
-Repository = "https://github.com/arshnooramin/virtual-esp"
+Repository = "https://github.com/arshnooramin/espswarm"
 
 [project.optional-dependencies]
 dev = ["black>=25.9,<27", "build>=1.2,<2", "ruff>=0.14,<1", "pytest>=8.4,<10"]
@@ -37,10 +40,10 @@ addopts = "-ra --strict-config --strict-markers"
 where = ["src"]
 
 [tool.setuptools.package-data]
-virtual_esp = ["py.typed"]
+espswarm = ["py.typed"]
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]

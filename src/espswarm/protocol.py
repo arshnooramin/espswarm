@@ -6,14 +6,14 @@ See docs/protocol.md. This module does no I/O.
 import json
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .errors import ProtocolError
 
 VERSION = 1
 MAX_PAYLOAD = 1024
-TOPIC_PREFIX = f"virtual-esp/v{VERSION}/"
+TOPIC_PREFIX = f"espswarm/v{VERSION}/"
 BOARD_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,32}")
 # Every board's status; subscribing to it discovers the fleet.
 ALL_STATUS_TOPICS = TOPIC_PREFIX + "+/status"
@@ -37,7 +37,7 @@ class Topics:
     gpio_events: str
 
     @classmethod
-    def for_board(cls, board_id: str) -> Topics:
+    def for_board(cls, board_id: str) -> "Topics":
         if not BOARD_ID_PATTERN.fullmatch(board_id):
             raise ValueError("board_id must be 1-32 ASCII letters, digits, '_' or '-'")
         base = TOPIC_PREFIX + board_id + "/"
@@ -51,10 +51,21 @@ class Topics:
 
 @dataclass(frozen=True)
 class Status:
+    """A board's retained status message."""
+
     session: str
     online: bool
-    capabilities: tuple[str, ...] = ()
-    info: dict[str, Any] = field(default_factory=dict)
+    board_id: str
+    target: str
+    runtime: str
+    agent_version: str
+    capabilities: tuple[str, ...]
+    max_payload: int
+    response_cache_size: int
+
+
+_STATUS_TEXT_FIELDS = ("board_id", "target", "runtime", "agent_version")
+_STATUS_INTEGER_FIELDS = ("max_payload", "response_cache_size")
 
 
 @dataclass(frozen=True)
@@ -105,16 +116,23 @@ def _decode_object(payload: bytes) -> dict[str, Any]:
 
 def decode_status(payload: bytes) -> Status:
     message = _decode_object(payload)
-    online = message.get("online")
-    capabilities = message.get("capabilities", [])
-    if type(online) is not bool or not isinstance(capabilities, list):
+    capabilities = message.get("capabilities")
+    if (
+        type(message.get("online")) is not bool
+        or not isinstance(capabilities, list)
+        or not all(isinstance(name, str) for name in capabilities)
+        or not all(isinstance(message.get(key), str) for key in _STATUS_TEXT_FIELDS)
+        or not all(type(message.get(key)) is int for key in _STATUS_INTEGER_FIELDS)
+    ):
         raise ProtocolError("Invalid status message")
-    info = {
-        key: value
-        for key, value in message.items()
-        if key not in ("v", "session", "online")
-    }
-    return Status(message["session"], online, tuple(capabilities), info)
+    # Unknown keys are ignored so newer agents stay readable.
+    fields = {key: message[key] for key in _STATUS_TEXT_FIELDS + _STATUS_INTEGER_FIELDS}
+    return Status(
+        session=message["session"],
+        online=message["online"],
+        capabilities=tuple(capabilities),
+        **fields,
+    )
 
 
 def decode_response(payload: bytes) -> Response:

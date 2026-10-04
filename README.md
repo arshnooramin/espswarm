@@ -1,4 +1,6 @@
-# Virtual ESP
+# espswarm
+
+[![CI](https://github.com/arshnooramin/espswarm/actions/workflows/python.yml/badge.svg)](https://github.com/arshnooramin/espswarm/actions/workflows/python.yml)
 
 Control a fleet of ESP32 boards from Python through an MQTT broker.
 
@@ -14,7 +16,7 @@ flowchart LR
 ## Why
 
 Libraries like [telemetrix-esp32](https://github.com/MrYsLab/telemetrix-esp32)
-control one board over a direct connection. Virtual ESP puts a broker in the
+control one board over a direct connection. espswarm puts a broker in the
 middle instead:
 
 - **Many boards, one connection.** Boards dial out to the broker, so they can be
@@ -29,30 +31,35 @@ middle instead:
 
 Intended for remote labs, hardware test benches and distributed prototypes.
 Commands make a network round trip, so timing-critical work belongs on the
-board. Requires Python 3.14+ and MicroPython 1.29.0. Not yet validated on
+board. Requires Python 3.11+ and MicroPython 1.29.0. Not yet validated on
 hardware.
 
 ## Usage
 
 ```python
-from virtual_esp import Client
+from espswarm import Client
 
 with Client("broker.lab") as client:
-    print(client.boards(online=True))
+    # Report boards as they are discovered, go offline, or restart.
+    client.on_status(lambda board, status: print(board.board_id, status.online))
 
-    bench = client.board("bench-1")
+    bench = client.board("bench-1")  # waits for the board's status
     bench.call("gpio.configure", {"pin": 2, "mode": "output"})
     bench.call("gpio.write", {"pin": 2, "level": 1})
-
-    client.on_status(lambda board, status: print(board.board_id, status.online))
 ```
+
+`client.boards()` lists the boards discovered so far. Their statuses arrive
+just after connecting, so use `client.board(id)` or `on_status` to wait for them.
 
 | Exception | Meaning |
 | --- | --- |
 | `RequestTimeout` | No response in time; the operation may or may not have run |
 | `BoardRestarted` | Board rebooted and lost pin configuration; reconfigure and continue |
-| `BoardOffline` | Board is offline, or the broker connection is down |
+| `BoardOffline` | The board is offline |
+| `BrokerDisconnected` | This client lost the broker; it reconnects automatically |
 | `BoardError` subclasses | Board rejected the request (`InvalidState`, `Busy`, …) |
+
+All exceptions derive from `SwarmError`.
 
 Calls are thread-safe. Callbacks run on a dedicated thread and may call boards.
 See the [protocol](docs/protocol.md) for operations, timeouts and failure
@@ -62,7 +69,7 @@ handling, and the [board agent](firmware/README.md) for flashing.
 
 | Path | Contents |
 | --- | --- |
-| `src/virtual_esp/` | Host library: `Client`, `Board`, transport, protocol encoding, errors |
+| `src/espswarm/` | Host library: `Client`, `Board`, transport, protocol encoding, errors |
 | `firmware/` | MicroPython board agent |
 | `docs/protocol.md` | Protocol specification |
 | `tests/` | `test_host_*` (library), `test_board_*` (firmware), MicroPython smoke test |

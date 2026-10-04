@@ -25,7 +25,7 @@ class CallbackDispatcher:
 
     def start(self) -> None:
         self._thread = threading.Thread(
-            target=self._run, name="virtual-esp-callbacks", daemon=True
+            target=self._run, name="espswarm-callbacks", daemon=True
         )
         self._thread.start()
 

@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 import paho.mqtt.client as mqtt
 
-from .errors import BoardOffline, ConnectionFailed
+from .errors import BrokerDisconnected, ConnectionFailed
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class MQTTTransport:
         with self._state:
             status, mid = self._client.subscribe(topic, QOS)
             if status != mqtt.MQTT_ERR_SUCCESS:
-                raise BoardOffline("Not connected to the MQTT broker")
+                raise BrokerDisconnected("Not connected to the MQTT broker")
             self._awaited_subscriptions.add(mid)
             try:
                 confirmed = self._state.wait_for(
@@ -116,10 +116,10 @@ class MQTTTransport:
 
     def publish(self, topic: str, payload: bytes) -> None:
         if not self._client.is_connected():
-            raise BoardOffline("Not connected to the MQTT broker")
+            raise BrokerDisconnected("Not connected to the MQTT broker")
         info = self._client.publish(topic, payload, QOS)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
-            raise BoardOffline("Not connected to the MQTT broker")
+            raise BrokerDisconnected("Not connected to the MQTT broker")
 
     def close(self) -> None:
         self._client.disconnect()

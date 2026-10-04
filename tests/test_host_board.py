@@ -4,7 +4,7 @@ import threading
 import pytest
 from host_fakes import FakeBroker
 
-from virtual_esp import (
+from espswarm import (
     BoardOffline,
     BoardRestarted,
     Client,
@@ -46,7 +46,7 @@ def test_board_reports_status(board):
     assert board.online
     assert board.session == "boot1"
     assert board.capabilities == ("gpio", "gpio.events")
-    assert board.status.info["board_id"] == "workbench"
+    assert board.status.board_id == "workbench"
 
 
 def test_info_returns_board_details(board):

@@ -1,11 +1,12 @@
+import importlib.metadata
 import json
 
+import espswarm_agent.limits as firmware_limits
+import espswarm_agent.protocol as firmware_protocol
 import pytest
-import virtual_esp_board.limits as firmware_limits
-import virtual_esp_board.protocol as firmware_protocol
 
-from virtual_esp import errors
-from virtual_esp.protocol import (
+from espswarm import errors
+from espswarm.protocol import (
     MAX_PAYLOAD,
     TOPIC_PREFIX,
     VERSION,
@@ -104,16 +105,37 @@ def test_decode_firmware_status():
     status = decode_status(firmware.status(True))
     assert status.session == "boot1"
     assert status.online
-    assert status.info["board_id"] == "workbench"
-    assert status.info["max_payload"] == MAX_PAYLOAD
+    assert status.board_id == "workbench"
+    assert status.agent_version == firmware_protocol.AGENT_VERSION
+    assert status.max_payload == MAX_PAYLOAD
+
+
+def test_agent_and_library_versions_match():
+    assert firmware_protocol.AGENT_VERSION == importlib.metadata.version("espswarm")
+
+
+def test_status_ignores_unknown_fields():
+    message = json.loads(firmware_protocol.Protocol("b", "s", []).status(True))
+    message["added_in_a_later_agent"] = 1
+    assert decode_status(json.dumps(message).encode()).board_id == "b"
+
+
+def valid_status(**changes):
+    message = json.loads(firmware_protocol.Protocol("b", "s", []).status(True))
+    message.update(changes)
+    return json.dumps({k: v for k, v in message.items() if v is not None}).encode()
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         b'{"v":1,"session":"s"}',
-        b'{"v":1,"session":"s","online":1}',
-        b'{"v":1,"session":"s","online":true,"capabilities":"gpio"}',
+        valid_status(online=1),
+        valid_status(capabilities="gpio"),
+        valid_status(capabilities=[1]),
+        valid_status(agent_version=None),
+        valid_status(max_payload="1024"),
+        valid_status(response_cache_size=True),
     ],
 )
 def test_malformed_status_raises_protocol_error(payload):

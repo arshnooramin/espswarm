@@ -19,7 +19,7 @@ WROOM boards, the SPIRAM variant for WROVER. `PORT` is e.g.
 ```sh
 cp firmware/config.example.json firmware/config.json   # edit; Git ignores it
 mpremote connect PORT mip install logging@0.6.2
-mpremote connect PORT fs cp -r firmware/virtual_esp_board :
+mpremote connect PORT fs cp -r firmware/espswarm_agent :
 mpremote connect PORT fs cp firmware/config.json :config.json
 mpremote connect PORT fs cp firmware/main.py :main.py
 mpremote connect PORT reset
@@ -41,7 +41,7 @@ a traceback on the console.
 | `mqtt_tls` | `false` | Verifies certificate and hostname |
 | `mqtt_ca_file` | `broker-ca.pem` | PEM CA, uploaded to the board |
 | `ntp_host` | `pool.ntp.org` | Clock sync before TLS |
-| `board_id` | `null` | Defaults to the Wi-Fi MAC; must be unique per broker |
+| `board_id` | `null` | Unique per broker. Set a readable name (`bench-1`) for fleets; the default is the Wi-Fi MAC |
 | `wifi_timeout` | `20` | Seconds, 1–120 |
 | `socket_timeout` | `5` | Seconds, 1–30; deadline per MQTT operation |
 | `keepalive` | `30` | Seconds, 10–300 |

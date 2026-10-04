@@ -1,12 +1,12 @@
 # MQTT protocol v1
 
-The contract between the host library (`src/virtual_esp`) and the board agent
-(`firmware/virtual_esp_board`). Both speak MQTT 3.1.1 through a broker; neither
+The contract between the host library (`src/espswarm`) and the board agent
+(`firmware/espswarm_agent`). Both speak MQTT 3.1.1 through a broker; neither
 talks to the other directly.
 
 ```mermaid
 flowchart LR
-    App[Application] --> Host[virtual_esp.Client]
+    App[Application] --> Host[espswarm.Client]
     Host <-->|request / response| Broker[(MQTT broker)]
     Broker <-->|status / events| Board[ESP32 agent]
     Board --> HW[GPIO]
@@ -14,7 +14,7 @@ flowchart LR
 
 ## Topics
 
-All topics are `virtual-esp/v1/<board_id>/<suffix>`. `board_id` is 1–32 of
+All topics are `espswarm/v1/<board_id>/<suffix>`. `board_id` is 1–32 of
 `[A-Za-z0-9_-]`; it defaults to the board's Wi-Fi MAC as 12 hex digits.
 
 | Suffix | Publisher | QoS | Retained | Content |
@@ -24,7 +24,7 @@ All topics are `virtual-esp/v1/<board_id>/<suffix>`. `board_id` is 1–32 of
 | `status` | Board, or broker (last will) | 1 | Yes | Session and online flag |
 | `events/gpio` | Board | 0 | No | Pin edges |
 
-**Discovery:** subscribe to `virtual-esp/v1/+/status`. The broker immediately
+**Discovery:** subscribe to `espswarm/v1/+/status`. The broker immediately
 sends each board's retained status, so one subscription lists the whole fleet
 and then reports presence changes. Clients share one broker connection for any
 number of boards.
@@ -66,7 +66,8 @@ broker publishes the identical message with `"online": false` as the last will.
 
 ```json
 {"v":1,"session":"a1b2c3d4e5f60718","online":true,"board_id":"workbench","target":"esp32",
- "runtime":"micropython","capabilities":["gpio","gpio.events"],"max_payload":1024,"response_cache_size":8}
+ "runtime":"micropython","agent_version":"0.1.0.dev0","capabilities":["gpio","gpio.events"],
+ "max_payload":1024,"response_cache_size":8}
 ```
 
 **Event.** See [GPIO events](#gpio-events).
@@ -218,7 +219,7 @@ DNS resolution and NTP run outside the 5 s operation deadline.
 | Board offline (last will received) | Reconnecting | Waiting calls fail at once with `BoardOffline`; new calls too |
 | Board reboots mid-request | New session, pins reset | Waiting calls fail with `BoardRestarted` when the new status arrives |
 | Board reboots, status not yet seen | Rejects with `stale_session` | `BoardRestarted` |
-| Host loses broker | Unaffected | paho reconnects and resubscribes; calls in flight time out, new calls raise `BoardOffline` until reconnected |
+| Host loses broker | Unaffected | paho reconnects and resubscribes; calls in flight time out, new calls raise `BrokerDisconnected` until reconnected |
 | Wi-Fi lost on board | Closes MQTT, backs off, reconnects | Sees last will, then online status with the same session |
 | Malformed or oversized MQTT frame | Drops the connection | As board offline |
 | More than 4 requests arrive while the board waits for a PUBACK | Drops the connection; queued requests are discarded | Their calls time out |

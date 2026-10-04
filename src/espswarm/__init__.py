@@ -6,6 +6,7 @@ from .errors import (
     BoardError,
     BoardOffline,
     BoardRestarted,
+    BrokerDisconnected,
     Busy,
     ConnectionFailed,
     HardwareError,
@@ -15,9 +16,9 @@ from .errors import (
     NotConnected,
     ProtocolError,
     RequestTimeout,
+    SwarmError,
     UnknownOutcome,
     UnsupportedOperation,
-    VirtualESPError,
 )
 from .protocol import Status
 from .transport import MQTTTransport, Transport
@@ -27,6 +28,7 @@ __all__ = [
     "BoardError",
     "BoardOffline",
     "BoardRestarted",
+    "BrokerDisconnected",
     "Busy",
     "Client",
     "ConnectionFailed",
@@ -42,5 +44,5 @@ __all__ = [
     "Transport",
     "UnknownOutcome",
     "UnsupportedOperation",
-    "VirtualESPError",
+    "SwarmError",
 ]

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import paho.mqtt.client as mqtt
 import pytest
 
-from virtual_esp import BoardOffline, ConnectionFailed, MQTTTransport
+from espswarm import BrokerDisconnected, ConnectionFailed, MQTTTransport
 
 SUCCESS = SimpleNamespace(is_failure=False)
 FAILURE = SimpleNamespace(is_failure=True)
@@ -153,9 +153,9 @@ def test_subscription_failures(suback, message):
 def test_publish_while_disconnected_fails():
     transport, client, _ = connected_transport()
     client.connected = False
-    with pytest.raises(BoardOffline):
+    with pytest.raises(BrokerDisconnected):
         transport.publish("a/request", b"{}")
-    with pytest.raises(BoardOffline):
+    with pytest.raises(BrokerDisconnected):
         transport.subscribe("a/response")
 
 

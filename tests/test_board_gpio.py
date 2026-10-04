@@ -1,7 +1,7 @@
 import pytest
 from board_fakes import Machine
-from virtual_esp_board.gpio import GPIO, EventQueue
-from virtual_esp_board.validation import CommandError
+from espswarm_agent.gpio import GPIO, EventQueue
+from espswarm_agent.validation import CommandError
 
 
 @pytest.fixture

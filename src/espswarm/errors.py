@@ -1,38 +1,42 @@
-"""Exceptions raised by the Virtual ESP host library."""
+"""Exceptions raised by the espswarm host library."""
 
 
-class VirtualESPError(Exception):
+class SwarmError(Exception):
     """Base class for all library errors."""
 
 
-class ConnectionFailed(VirtualESPError):
+class ConnectionFailed(SwarmError):
     """The MQTT broker could not be reached or refused the connection."""
 
 
-class NotConnected(VirtualESPError):
-    """The board was used before connect() or after close()."""
+class BrokerDisconnected(SwarmError):
+    """This client lost its broker connection; it is reconnecting."""
 
 
-class BoardOffline(VirtualESPError):
+class NotConnected(SwarmError):
+    """The client was used before connect() or after close()."""
+
+
+class BoardOffline(SwarmError):
     """The board is not connected to the broker."""
 
 
-class BoardRestarted(VirtualESPError):
+class BoardRestarted(SwarmError):
     """The board rebooted, so its pin configuration was lost.
 
     Later calls use the new session; configure pins again before using them.
     """
 
 
-class RequestTimeout(VirtualESPError, TimeoutError):
+class RequestTimeout(SwarmError, TimeoutError):
     """No response arrived in time; the operation may or may not have run."""
 
 
-class ProtocolError(VirtualESPError):
+class ProtocolError(SwarmError):
     """A message from the board did not follow the protocol."""
 
 
-class BoardError(VirtualESPError):
+class BoardError(SwarmError):
     """The board rejected or failed a request.
 
     `code` is the protocol error code, such as "invalid_args".

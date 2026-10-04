@@ -1,8 +1,8 @@
 """Test doubles that connect the host library to the real firmware code."""
 
 from board_fakes import Machine
-from virtual_esp_board.gpio import GPIO
-from virtual_esp_board.protocol import Protocol as FirmwareProtocol
+from espswarm_agent.gpio import GPIO
+from espswarm_agent.protocol import Protocol as FirmwareProtocol
 
 
 def topic_matches(pattern, topic):

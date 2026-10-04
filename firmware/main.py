@@ -1,10 +1,10 @@
-"""Boot the board agent after uploading config.json and virtual_esp_board/."""
+"""Boot the board agent after uploading config.json and espswarm_agent/."""
 
 import logging
 import time
 
-from virtual_esp_board.agent import run
-from virtual_esp_board.settings import Settings
+from espswarm_agent.agent import run
+from espswarm_agent.settings import Settings
 
 # Delay before resetting after an unexpected error, to avoid a tight boot loop.
 RESET_DELAY_SECONDS = 10

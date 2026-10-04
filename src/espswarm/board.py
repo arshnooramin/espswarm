@@ -9,7 +9,7 @@ from .errors import (
     BoardRestarted,
     NotConnected,
     RequestTimeout,
-    VirtualESPError,
+    SwarmError,
     board_error,
 )
 from .protocol import Response, Status, Topics, encode_request, new_request_id
@@ -23,7 +23,7 @@ class _PendingRequest:
         self.session = session
         self.done = threading.Event()
         self.response: Response | None = None
-        self.error: VirtualESPError | None = None
+        self.error: SwarmError | None = None
 
 
 class Board:
@@ -32,7 +32,7 @@ class Board:
     Calls are thread-safe. State is guarded by the client's lock.
     """
 
-    def __init__(self, client: Client, board_id: str) -> None:
+    def __init__(self, client: "Client", board_id: str) -> None:
         self.board_id = board_id
         self.topics = Topics.for_board(board_id)
         self._client = client
@@ -146,7 +146,7 @@ class Board:
 
     def _fail_pending(
         self,
-        make_error: Callable[[], VirtualESPError],
+        make_error: Callable[[], SwarmError],
         *,
         except_session: str | None = None,
     ) -> None:

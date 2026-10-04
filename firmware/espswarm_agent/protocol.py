@@ -4,10 +4,12 @@ from .json_codec import dumps, loads
 from .limits import MAX_IDENTITY_LENGTH, MAX_PAYLOAD, MAX_REQUEST_ID_LENGTH
 from .validation import CommandError, is_token, require_keys
 
+# Reported in status so a fleet's agent versions can be audited.
+AGENT_VERSION = "0.1.0.dev0"
 VERSION = 1
 CACHE_SIZE = 8
 MAX_OPERATION_LENGTH = 48
-TOPIC_PREFIX = "virtual-esp/v" + str(VERSION) + "/"
+TOPIC_PREFIX = "espswarm/v" + str(VERSION) + "/"
 REQUEST_FIELDS = {"v", "id", "session", "op", "args"}
 # Stay within MicroPython's small-integer range on 32-bit boards.
 EVENT_SEQUENCE_MODULUS = 1 << 30
@@ -63,7 +65,7 @@ class Protocol:
                     raise ValueError("Operation is provided twice: " + operation)
                 self._routes[operation] = peripheral
         self._sequence = 0
-        self.client_id = ("virtual-esp-" + board_id).encode()
+        self.client_id = ("espswarm-" + board_id).encode()
         self.request_topic = self._topic("request")
         self.response_topic = self._topic("response")
         self.status_topic = self._topic("status")
@@ -82,6 +84,7 @@ class Protocol:
             "board_id": self.board_id,
             "target": "esp32",
             "runtime": "micropython",
+            "agent_version": AGENT_VERSION,
             "capabilities": self.capabilities,
             "max_payload": MAX_PAYLOAD,
             "response_cache_size": CACHE_SIZE,

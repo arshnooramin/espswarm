@@ -1,71 +1,103 @@
-# ESP32 board agent
+# Board agent
 
-MicroPython companion for Virtual ESP. Supports a classic Espressif ESP32 DevKit
-with GPIO commands and interrupt events. Tested runtime compatibility:
-MicroPython 1.29.0. Physical board validation is still required.
+MicroPython 1.29.0 agent for a classic ESP32 DevKit. It connects to an existing
+MQTT broker and serves the [protocol](../docs/protocol.md). Not yet validated
+on hardware.
 
-## Install MicroPython
-
-Install the board tools from the repository root:
+## Flash and deploy
 
 ```sh
 python -m pip install '.[board]'
-```
-
-Download the stable 1.29.0 `.bin` for your board from the
-[official ESP32 firmware page](https://micropython.org/download/ESP32_GENERIC/).
-Use the generic build for a typical WROOM DevKit and the SPIRAM variant for WROVER.
-The following initial installation erases existing flash contents:
-
-```sh
 esptool --chip esp32 --port PORT erase-flash
-esptool --chip esp32 --port PORT write-flash 0x1000 PATH_TO_FIRMWARE.bin
+esptool --chip esp32 --port PORT write-flash 0x1000 ESP32_GENERIC-v1.29.0.bin
 ```
 
-Replace `PORT` with the USB serial device (for example, `/dev/cu.usbserial-...`
-on macOS or `COM4` on Windows).
-
-## Configure and upload
-
-Copy `firmware/config.example.json` to `firmware/config.json`. Set Wi-Fi credentials
-and the address of your MQTT broker. The board connects to an existing broker;
-it does not host one. Your local `config.json` is ignored by Git and loaded and
-validated directly by the board at startup. Use valid JSON with double-quoted
-keys and strings, and no comments. Give each board a unique `board_id`, or leave
-it as `null` to use the full Wi-Fi MAC address.
-
-From the repository root:
+Use the [generic firmware](https://micropython.org/download/ESP32_GENERIC/) for
+WROOM boards, the SPIRAM variant for WROVER. `PORT` is e.g.
+`/dev/cu.usbserial-…` or `COM4`.
 
 ```sh
+cp firmware/config.example.json firmware/config.json   # edit; Git ignores it
 mpremote connect PORT mip install logging@0.6.2
 mpremote connect PORT fs cp -r firmware/virtual_esp_board :
 mpremote connect PORT fs cp firmware/config.json :config.json
 mpremote connect PORT fs cp firmware/main.py :main.py
 mpremote connect PORT reset
+mpremote connect PORT repl                              # view logs
 ```
 
-The board uses MicroPython's `logging` package for console output at INFO level.
-Startup and online status use INFO; connection retries use WARNING. View logs
-over USB with `mpremote connect PORT repl`. Credentials and command payloads
-are not logged. Configuration errors propagate as tracebacks during startup.
-Any other unexpected error is logged, and the board resets after 10 seconds.
+## Configuration
 
-Subscribe to `virtual-esp/v1/<board_id>/status` to see the boot session and
-available capabilities. See the [protocol reference](../docs/protocol.md) for
-commands and responses. The high-level host API is under development.
+`config.json` is strict JSON, validated at boot. Invalid config stops boot with
+a traceback on the console.
 
-For TLS, set `"mqtt_tls": true`, select your broker's TLS port (usually 8883), and
-upload its trusted CA certificate to the `mqtt_ca_file` path on the board. PEM
-certificates are supported. Set `ntp_host` to a reachable NTP server; certificate
-validation requires a correct clock. TLS verification is always enabled.
+| Key | Default | Notes |
+| --- | --- | --- |
+| `wifi_ssid` | required | ≤ 32 bytes |
+| `wifi_password` | `""` | ≤ 63 bytes |
+| `mqtt_host` | required | |
+| `mqtt_port` | `1883` | Usually 8883 with TLS |
+| `mqtt_username`, `mqtt_password` | `null` | Password requires username |
+| `mqtt_tls` | `false` | Verifies certificate and hostname |
+| `mqtt_ca_file` | `broker-ca.pem` | PEM CA, uploaded to the board |
+| `ntp_host` | `pool.ntp.org` | Clock sync before TLS |
+| `board_id` | `null` | Defaults to the Wi-Fi MAC; must be unique per broker |
+| `wifi_timeout` | `20` | Seconds, 1–120 |
+| `socket_timeout` | `5` | Seconds, 1–30; deadline per MQTT operation |
+| `keepalive` | `30` | Seconds, 10–300 |
 
-## GPIO availability
+## Internals
 
-Supported pins: 0, 2, 4, 5, 12–15, 18–19, 21–23, 25–27, and 32–39. Some pins
-may not be exposed on your DevKit. Pins 34–39 are input-only and have no internal
-pull resistors. Flash pins 6–11, console pins 1/3, and possible PSRAM pins 16/17
-are reserved. Check your board wiring around boot-strapping pins 0/2/5/12/15.
+```mermaid
+flowchart TD
+    main[main.py] --> run[agent.run]
+    run --> S[ConnectionSupervisor]
+    S -->|Wi-Fi, NTP, backoff| A[Agent]
+    A -->|poll / publish| M[mqtt.MQTT]
+    A -->|handle, status, event| P[protocol.Protocol]
+    P -->|execute| G[gpio.GPIO]
+    G -->|hard IRQ| Q[EventQueue]
+    A -->|drain| Q
+```
 
-Outputs retain their last configured state during a network outage. Resetting the
-board clears agent configuration. GPIO events are best-effort; precise timing
-and reliable pulse counting need local hardware support.
+| Module | Role |
+| --- | --- |
+| `agent.py` | `ConnectionSupervisor` keeps Wi-Fi and MQTT up; `Agent` loop: poll one message, respond, drain ≤ 16 events |
+| `protocol.py` | Validation, `ResponseCache`, routing to peripherals, message encoding |
+| `peripheral.py` | `Peripheral` base: `capabilities`, an `operations` table, argument checks |
+| `gpio.py` | `GPIO` peripheral and the IRQ-safe `EventQueue` |
+| `mqtt.py` | Minimal MQTT 3.1.1 client: QoS 0/1, bounded buffers, deadlines |
+| `settings.py` | `config.json` schema (`FIELDS`) |
+| `json_codec.py` | Strict JSON decoder for requests and config |
+
+Everything runs in one thread. IRQ handlers only enqueue. Unexpected exceptions
+are logged and the board resets after 10 s. Credentials and payloads are never
+logged.
+
+### Adding a peripheral
+
+Subclass `Peripheral`, declare `capabilities` and `operations`, and pass an
+instance to `Protocol` in `agent.run()`. Methods raise `CommandError` for client
+errors and return a JSON-serializable dict.
+
+```python
+class ADC(Peripheral):
+    capabilities = ("adc",)
+    operations = {"adc.read": ("read", ("pin",), ())}  # method, required, optional
+
+    def read(self, pin):
+        ...
+        return {"value": raw}
+```
+
+Peripherals do not yet coordinate pin ownership.
+
+## Testing
+
+```sh
+python -m pytest tests/test_board_*.py
+micropython tests/micropython_smoke.py    # from the repo root; CI does this
+```
+
+CPython tests use the fakes in `tests/board_fakes.py`. The smoke test checks
+MicroPython compatibility, including that the IRQ path does not allocate.

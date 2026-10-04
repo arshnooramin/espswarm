@@ -6,7 +6,7 @@ talks to the other directly.
 
 ```mermaid
 flowchart LR
-    App[Application] --> Host[virtual_esp.Board]
+    App[Application] --> Host[virtual_esp.Client]
     Host <-->|request / response| Broker[(MQTT broker)]
     Broker <-->|status / events| Board[ESP32 agent]
     Board --> HW[GPIO]
@@ -23,6 +23,11 @@ All topics are `virtual-esp/v1/<board_id>/<suffix>`. `board_id` is 1–32 of
 | `response` | Board | 1 | No | One per request |
 | `status` | Board, or broker (last will) | 1 | Yes | Session and online flag |
 | `events/gpio` | Board | 0 | No | Pin edges |
+
+**Discovery:** subscribe to `virtual-esp/v1/+/status`. The broker immediately
+sends each board's retained status, so one subscription lists the whole fleet
+and then reports presence changes. Clients share one broker connection for any
+number of boards.
 
 The response topic is shared by every client of a board. Clients tell their
 responses apart by request ID. Restrict access with broker ACLs.
@@ -116,7 +121,7 @@ flowchart TD
     B -- no --> E1[invalid_request, id null]
     B -- yes --> C{Retained message?}
     C -- yes --> E2[retained_request]
-    C -- no --> D{Exactly v, id, session, op, args; valid id?}
+    C -- no --> D{"Exactly v, id, session, op, args, and a valid id?"}
     D -- no --> E1b[invalid_request]
     D -- yes --> F{v == 1?}
     F -- no --> E3[unsupported_version]
@@ -191,8 +196,8 @@ also changes the session, so old requests are rejected anyway.
 
 | Where | What | Default | On expiry |
 | --- | --- | --- | --- |
-| Host `Board` | Wait for each response | 5 s (`timeout=`) | `RequestTimeout`: outcome unknown |
-| Host `Board.connect` | Wait for retained status | 5 s | `BoardOffline` |
+| Host `board.call` | Wait for each response | 5 s (`timeout=`) | `RequestTimeout`: outcome unknown |
+| Host `client.board()` | Wait for the board's first status | 5 s | `BoardOffline` |
 | Host transport | Broker CONNACK, each SUBACK | 10 s | `ConnectionFailed` |
 | Host transport | Reconnect delay | 1 s doubling to 30 s | Retries forever, then resubscribes |
 | Board | Wi-Fi association | 20 s (`wifi_timeout`) | Disconnect, back off, retry |
@@ -225,7 +230,7 @@ DNS resolution and NTP run outside the 5 s operation deadline.
 sequenceDiagram
     participant B as Board
     participant M as Broker
-    B->>B: connect Wi-Fi (≤ 20 s); NTP sync if TLS
+    B->>B: connect Wi-Fi (≤ 20 s), then NTP sync if TLS
     B->>M: CONNECT clean session, last will = status online=false (retained, QoS 1)
     M->>B: CONNACK
     B->>M: SUBSCRIBE request (QoS 1)

@@ -1,6 +1,7 @@
-"""Python library for controlling ESP32 boards over MQTT."""
+"""Control a fleet of ESP32 boards from Python through an MQTT broker."""
 
 from .board import Board
+from .client import Client
 from .errors import (
     BoardError,
     BoardOffline,
@@ -18,6 +19,7 @@ from .errors import (
     UnsupportedOperation,
     VirtualESPError,
 )
+from .protocol import Status
 from .transport import MQTTTransport, Transport
 
 __all__ = [
@@ -26,6 +28,7 @@ __all__ = [
     "BoardOffline",
     "BoardRestarted",
     "Busy",
+    "Client",
     "ConnectionFailed",
     "HardwareError",
     "InvalidArguments",
@@ -35,6 +38,7 @@ __all__ = [
     "NotConnected",
     "ProtocolError",
     "RequestTimeout",
+    "Status",
     "Transport",
     "UnknownOutcome",
     "UnsupportedOperation",

@@ -5,25 +5,28 @@ from virtual_esp_board.gpio import GPIO
 from virtual_esp_board.protocol import Protocol as FirmwareProtocol
 
 
-class LoopbackTransport:
-    """A Transport wired straight to the firmware Protocol, with no broker.
+def topic_matches(pattern, topic):
+    """MQTT matching for the single-level `+` wildcard."""
+    pattern_parts, topic_parts = pattern.split("/"), topic.split("/")
+    return len(pattern_parts) == len(topic_parts) and all(
+        expected in ("+", actual)
+        for expected, actual in zip(pattern_parts, topic_parts, strict=True)
+    )
 
-    Messages are delivered synchronously. Counters let tests drop requests or
-    responses to simulate a lossy network.
+
+class FakeBoard:
+    """One board running the real firmware Protocol and GPIO, on fake pins.
+
+    Counters let tests drop requests or responses to simulate a lossy network.
     """
 
-    def __init__(self, board_id="workbench", session="boot1", online=True):
+    def __init__(self, broker, board_id, session):
+        self.broker = broker
         self.board_id = board_id
-        self._boot(session)
-        self.on_message = None
-        self.subscriptions = []
         self.requests = []
         self.drop_requests = 0
         self.drop_responses = 0
-        self.closed = False
-        self.retained = {}
-        if online is not None:
-            self.retained[self.status_topic] = self.firmware.status(online)
+        self._boot(session)
 
     def _boot(self, session):
         self.machine = Machine()
@@ -33,17 +36,7 @@ class LoopbackTransport:
         self.response_topic = self.firmware.response_topic.decode()
         self.status_topic = self.firmware.status_topic.decode()
 
-    def connect(self, on_message):
-        self.on_message = on_message
-
-    def subscribe(self, topic):
-        self.subscriptions.append(topic)
-        if topic in self.retained:
-            self.on_message(topic, self.retained[topic])
-
-    def publish(self, topic, payload):
-        if topic != self.request_topic:
-            return
+    def handle(self, payload):
         self.requests.append(payload)
         if self.drop_requests:
             self.drop_requests -= 1
@@ -52,24 +45,66 @@ class LoopbackTransport:
         if self.drop_responses:
             self.drop_responses -= 1
             return
-        self.deliver(self.response_topic, response)
+        self.broker.deliver(self.response_topic, response)
 
-    def deliver(self, topic, payload):
-        if topic in self.subscriptions:
-            self.on_message(topic, payload)
-
-    def set_status(self, payload):
-        self.retained[self.status_topic] = payload
-        self.deliver(self.status_topic, payload)
-
-    def reboot(self, session):
-        """Restart the board: new session, all pin configuration lost."""
-        self._boot(session)
-        self.set_status(self.firmware.status(True))
+    def go_online(self):
+        self.broker.retain(self.status_topic, self.firmware.status(True))
 
     def go_offline(self):
         """Publish what the broker sends as the board's last will."""
-        self.set_status(self.firmware.status(False))
+        self.broker.retain(self.status_topic, self.firmware.status(False))
+
+    def reboot(self, session):
+        """Restart: new session, all pin configuration lost."""
+        self._boot(session)
+        self.go_online()
+
+
+class FakeBroker:
+    """A Transport with an in-process broker and boards behind it.
+
+    Messages are delivered synchronously on the publishing thread.
+    """
+
+    def __init__(self):
+        self.boards = {}
+        self.retained = {}
+        self.subscriptions = []
+        self.on_message = None
+        self.connected = False
+        self.closed = False
+
+    def add_board(self, board_id="workbench", session="boot1", online=True):
+        board = self.boards[board_id] = FakeBoard(self, board_id, session)
+        if online is not None:
+            (board.go_online if online else board.go_offline)()
+        return board
+
+    def connect(self, on_message):
+        self.on_message = on_message
+        self.connected = True
+
+    def subscribe(self, pattern):
+        self.subscriptions.append(pattern)
+        for topic, payload in list(self.retained.items()):
+            if topic_matches(pattern, topic):
+                self.on_message(topic, payload)
+
+    def publish(self, topic, payload):
+        for board in self.boards.values():
+            if topic == board.request_topic:
+                board.handle(payload)
+
+    def retain(self, topic, payload):
+        self.retained[topic] = payload
+        self.deliver(topic, payload)
+
+    def deliver(self, topic, payload):
+        if self.connected and any(
+            topic_matches(pattern, topic) for pattern in self.subscriptions
+        ):
+            self.on_message(topic, payload)
 
     def close(self):
+        self.connected = False
         self.closed = True

@@ -1,44 +1,68 @@
 # Virtual ESP
 
-Control physical ESP32 boards from Python over MQTT. A MicroPython agent runs on
-the board; this library talks to it through your broker.
+Control a fleet of ESP32 boards from Python through an MQTT broker.
 
 ```mermaid
 flowchart LR
-    App[Your code] --> Lib[virtual_esp]
-    Lib <--> Broker[(MQTT broker)]
-    Broker <--> Agent[Board agent]
-    Agent --> Pins[GPIO]
+    S[Script] --> Broker[(MQTT broker)]
+    D[Dashboard] --> Broker
+    Broker --- B1[ESP32 bench-1]
+    Broker --- B2[ESP32 bench-2]
+    Broker --- B3[ESP32 bench-3]
 ```
 
-Requires Python 3.14+ and MicroPython 1.29.0. Not yet validated on hardware.
+## Why
+
+Libraries like [telemetrix-esp32](https://github.com/MrYsLab/telemetrix-esp32)
+control one board over a direct connection. Virtual ESP puts a broker in the
+middle instead:
+
+- **Many boards, one connection.** Boards dial out to the broker, so they can be
+  anywhere they can reach it, including behind NAT. No board IP addresses.
+- **Many clients.** Scripts, notebooks and dashboards can use the same boards.
+- **Discovery and presence.** Boards announce themselves; offline boards are
+  reported by the broker.
+- **Broker security.** Use your broker's TLS, accounts and ACLs instead of an
+  open port per board.
+- **Safe failures.** Boot sessions, duplicate suppression for retries, and
+  explicit "outcome unknown" timeouts.
+
+Intended for remote labs, hardware test benches and distributed prototypes.
+Commands make a network round trip, so timing-critical work belongs on the
+board. Requires Python 3.14+ and MicroPython 1.29.0. Not yet validated on
+hardware.
 
 ## Usage
 
 ```python
-from virtual_esp import Board, RequestTimeout
+from virtual_esp import Client
 
-with Board("workbench", host="192.168.1.10") as board:
-    board.call("gpio.configure", {"pin": 2, "mode": "output"})
-    board.call("gpio.write", {"pin": 2, "level": 1})
+with Client("broker.lab") as client:
+    print(client.boards(online=True))
+
+    bench = client.board("bench-1")
+    bench.call("gpio.configure", {"pin": 2, "mode": "output"})
+    bench.call("gpio.write", {"pin": 2, "level": 1})
+
+    client.on_status(lambda board, status: print(board.board_id, status.online))
 ```
 
 | Exception | Meaning |
 | --- | --- |
 | `RequestTimeout` | No response in time; the operation may or may not have run |
 | `BoardRestarted` | Board rebooted and lost pin configuration; reconfigure and continue |
-| `BoardOffline` | Board or broker connection is down |
+| `BoardOffline` | Board is offline, or the broker connection is down |
 | `BoardError` subclasses | Board rejected the request (`InvalidState`, `Busy`, …) |
 
-`call()` is thread-safe. See the [protocol](docs/protocol.md) for operations,
-timeouts and failure handling, and the [board agent](firmware/README.md) for
-flashing.
+Calls are thread-safe. Callbacks run on a dedicated thread and may call boards.
+See the [protocol](docs/protocol.md) for operations, timeouts and failure
+handling, and the [board agent](firmware/README.md) for flashing.
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `src/virtual_esp/` | Host library: `Board`, `MQTTTransport`, protocol encoding, errors |
+| `src/virtual_esp/` | Host library: `Client`, `Board`, transport, protocol encoding, errors |
 | `firmware/` | MicroPython board agent |
 | `docs/protocol.md` | Protocol specification |
 | `tests/` | `test_host_*` (library), `test_board_*` (firmware), MicroPython smoke test |
@@ -53,5 +77,5 @@ ruff check . && black --check .
 python -m build
 ```
 
-Host tests run against the real firmware protocol in-process
+Host tests run against the real firmware code with an in-process fake broker
 (`tests/host_fakes.py`); no broker or board is needed.

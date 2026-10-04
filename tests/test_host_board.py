@@ -2,12 +2,12 @@ import json
 import threading
 
 import pytest
-from host_fakes import LoopbackTransport
+from host_fakes import FakeBroker
 
 from virtual_esp import (
-    Board,
     BoardOffline,
     BoardRestarted,
+    Client,
     InvalidState,
     NotConnected,
     RequestTimeout,
@@ -16,25 +16,37 @@ from virtual_esp import (
 
 
 @pytest.fixture
-def transport():
-    return LoopbackTransport()
+def broker():
+    broker = FakeBroker()
+    broker.add_board("workbench")
+    return broker
 
 
 @pytest.fixture
-def board(transport):
-    with Board("workbench", transport=transport, timeout=0.5) as board:
-        yield board
+def fake(broker):
+    return broker.boards["workbench"]
+
+
+@pytest.fixture
+def client(broker):
+    with Client(transport=broker, timeout=0.5) as client:
+        yield client
+
+
+@pytest.fixture
+def board(client):
+    return client.board("workbench")
 
 
 def configure_output(board, pin=2):
     return board.call("gpio.configure", {"pin": pin, "mode": "output"})
 
 
-def test_connect_reads_session_and_capabilities_from_status(board, transport):
+def test_board_reports_status(board):
     assert board.online
     assert board.session == "boot1"
     assert board.capabilities == ("gpio", "gpio.events")
-    assert transport.subscriptions == [transport.response_topic, transport.status_topic]
+    assert board.status.info["board_id"] == "workbench"
 
 
 def test_info_returns_board_details(board):
@@ -43,19 +55,26 @@ def test_info_returns_board_details(board):
     assert info["capabilities"] == ["gpio", "gpio.events"]
 
 
-def test_call_runs_operation_on_the_board(board, transport):
+def test_call_runs_operation_on_the_board(board, fake):
     configure_output(board)
     assert board.call("gpio.write", {"pin": 2, "level": 1}) == {}
-    assert transport.machine.pins[2].value() == 1
+    assert fake.machine.pins[2].value() == 1
 
 
-def test_each_call_uses_a_new_request_id(board, transport):
+def test_response_topic_is_subscribed_on_first_call(board, broker, fake):
+    assert fake.response_topic not in broker.subscriptions
+    board.info()
+    board.info()
+    assert broker.subscriptions.count(fake.response_topic) == 1
+
+
+def test_each_call_uses_a_new_request_id(board, fake):
     configure_output(board)
     for level in (1, 0, 1, 0):
         board.call("gpio.write", {"pin": 2, "level": level})
-    ids = [json.loads(payload)["id"] for payload in transport.requests]
+    ids = [json.loads(payload)["id"] for payload in fake.requests]
     assert len(set(ids)) == len(ids)
-    assert transport.machine.pins[2].value() == 0
+    assert fake.machine.pins[2].value() == 0
 
 
 def test_board_errors_raise_matching_exceptions(board):
@@ -66,20 +85,20 @@ def test_board_errors_raise_matching_exceptions(board):
         board.call("spi.transfer")
 
 
-def test_lost_request_times_out_with_unknown_outcome(board, transport):
-    transport.drop_requests = 1
+def test_lost_request_times_out_with_unknown_outcome(board, fake):
+    fake.drop_requests = 1
     with pytest.raises(RequestTimeout, match="may or may not have run"):
         board.call("board.info", timeout=0.05)
 
 
-def test_retry_after_lost_response_runs_the_operation_once(board, transport):
-    transport.drop_responses = 1
+def test_retry_after_lost_response_runs_the_operation_once(board, fake):
+    fake.drop_responses = 1
     result = board.call(
         "gpio.configure", {"pin": 2, "mode": "output"}, timeout=0.05, retries=1
     )
     assert result == {}
-    assert transport.requests[0] == transport.requests[1]
-    assert transport.machine.constructions == [2]
+    assert fake.requests[0] == fake.requests[1]
+    assert fake.machine.constructions == [2]
 
 
 def test_negative_retries_are_rejected(board):
@@ -87,18 +106,19 @@ def test_negative_retries_are_rejected(board):
         board.call("board.info", retries=-1)
 
 
-def test_responses_for_other_requests_or_sessions_are_ignored(board, transport):
-    transport.drop_requests = 1
+def test_responses_for_other_requests_are_ignored(board, broker, fake):
+    board.info()
+    fake.drop_requests = 1
     stray = b'{"v":1,"id":"someone-else","session":"boot1","ok":true,"result":{}}'
-    transport.deliver(transport.response_topic, stray)
-    transport.deliver(transport.response_topic, b"not json")
+    broker.deliver(fake.response_topic, stray)
+    broker.deliver(fake.response_topic, b"not json")
     with pytest.raises(RequestTimeout):
         board.call("board.info", timeout=0.05)
 
 
-def test_restart_is_reported_once_then_new_session_is_used(board, transport):
+def test_restart_is_reported_once_then_new_session_is_used(board, fake):
     configure_output(board)
-    transport.reboot("boot2")
+    fake.reboot("boot2")
     with pytest.raises(BoardRestarted):
         board.call("gpio.write", {"pin": 2, "level": 1})
     assert board.session == "boot2"
@@ -108,18 +128,22 @@ def test_restart_is_reported_once_then_new_session_is_used(board, transport):
     board.call("gpio.write", {"pin": 2, "level": 1})
 
 
-def test_stale_session_response_is_reported_as_restart(board, transport):
+def test_stale_session_response_is_reported_as_restart(board, fake):
+    board.info()
     # The board rebooted, but its new status has not reached us yet.
-    transport._boot("boot2")
+    fake._boot("boot2")
     with pytest.raises(BoardRestarted):
         board.call("board.info")
 
 
-def test_offline_board_fails_fast(board, transport):
-    transport.go_offline()
+def test_offline_board_fails_fast_and_recovers(board, fake):
+    fake.go_offline()
     assert not board.online
     with pytest.raises(BoardOffline):
         board.call("board.info")
+    fake.go_online()
+    board.wait_until_online(timeout=0.05)
+    assert board.info()["board_id"] == "workbench"
 
 
 def run_in_thread(function):
@@ -136,9 +160,9 @@ def run_in_thread(function):
     return thread, outcome
 
 
-def wait_for_request(transport, count=1):
+def wait_for_request(fake, count=1):
     for _ in range(1000):
-        if len(transport.requests) >= count:
+        if len(fake.requests) >= count:
             return
         threading.Event().wait(0.001)
     raise AssertionError("request was not sent")
@@ -147,21 +171,21 @@ def wait_for_request(transport, count=1):
 @pytest.mark.parametrize(
     "event, error",
     [
-        (lambda transport: transport.go_offline(), BoardOffline),
-        (lambda transport: transport.reboot("boot2"), BoardRestarted),
+        (lambda fake: fake.go_offline(), BoardOffline),
+        (lambda fake: fake.reboot("boot2"), BoardRestarted),
     ],
 )
-def test_waiting_call_is_woken_when_board_goes_away(board, transport, event, error):
-    transport.drop_requests = 1
+def test_waiting_call_is_woken_when_board_goes_away(board, fake, event, error):
+    fake.drop_requests = 1
     thread, outcome = run_in_thread(lambda: board.call("board.info", timeout=5))
-    wait_for_request(transport)
-    event(transport)
+    wait_for_request(fake)
+    event(fake)
     thread.join(timeout=1)
     assert not thread.is_alive()
     assert isinstance(outcome["error"], error)
 
 
-def test_concurrent_calls_get_their_own_responses(board, transport):
+def test_concurrent_calls_get_their_own_responses(board, fake):
     for pin in (2, 4, 5):
         configure_output(board, pin)
     threads = [
@@ -173,30 +197,14 @@ def test_concurrent_calls_get_their_own_responses(board, transport):
     for thread, _ in threads:
         thread.join(timeout=2)
     assert all(outcome == {"result": {}} for _, outcome in threads)
-    assert all(transport.machine.pins[pin].value() == 1 for pin in (2, 4, 5))
+    assert all(fake.machine.pins[pin].value() == 1 for pin in (2, 4, 5))
 
 
-def test_connect_fails_when_board_never_published_status():
-    transport = LoopbackTransport(online=None)
-    with pytest.raises(BoardOffline, match="is it running"):
-        Board("workbench", transport=transport, timeout=0.05).connect()
-    assert transport.closed
-
-
-def test_connect_fails_when_board_is_offline():
-    transport = LoopbackTransport(online=False)
-    with pytest.raises(BoardOffline, match="offline"):
-        Board("workbench", transport=transport, timeout=0.05).connect()
-    assert transport.closed
-
-
-def test_calls_require_connection(transport):
-    board = Board("workbench", transport=transport)
+def test_closing_the_client_disables_boards(broker):
+    client = Client(transport=broker).connect()
+    board = client.board("workbench")
+    client.close()
+    assert broker.closed
     with pytest.raises(NotConnected):
         board.call("board.info")
-    board.connect()
-    board.close()
-    assert transport.closed
-    with pytest.raises(NotConnected):
-        board.call("board.info")
-    board.close()
+    client.close()

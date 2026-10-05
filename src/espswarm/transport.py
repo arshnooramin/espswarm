@@ -1,6 +1,7 @@
 """MQTT connection used by Board; any object with the Transport methods works."""
 
 import logging
+import socket
 import ssl
 import threading
 from collections.abc import Callable
@@ -127,6 +128,7 @@ class MQTTTransport:
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         if not reason_code.is_failure:
+            _disable_nagle(client.socket())
             # Sessions are clean, so the broker forgot earlier subscriptions.
             for topic in self._topics:
                 client.subscribe(topic, QOS)
@@ -148,3 +150,15 @@ class MQTTTransport:
         handler = self._on_message_handler
         if handler is not None:
             handler(message.topic, message.payload)
+
+
+def _disable_nagle(sock: Any) -> None:
+    """Send small requests at once instead of waiting for earlier ACKs.
+
+    With Nagle's algorithm, each request waits for the board to acknowledge the
+    previous PUBACK, which lwIP delays by up to 250 ms.
+    """
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except (AttributeError, OSError):
+        logger.debug("Could not disable Nagle's algorithm")

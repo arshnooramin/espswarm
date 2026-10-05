@@ -71,7 +71,7 @@ def test_interrupts_only_enqueue_captured_levels(machine, hardware):
     hardware.execute("gpio.configure", {"pin": 5, "mode": "input"})
     hardware.execute("gpio.watch", {"pin": 5, "edge": "any"})
     pin = machine.pins[5]
-    assert pin.irq_calls[-1][2]
+    assert pin.irq_calls[-1][1] == machine.Pin.IRQ_RISING | machine.Pin.IRQ_FALLING
     pin.fire(1)
     pin.fire(0)
     assert hardware.events.pop() == (5, 1, 0)

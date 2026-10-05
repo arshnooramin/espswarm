@@ -153,6 +153,10 @@ class FakeSocket(Stream):
     def __init__(self, *address, fail=False):
         super().__init__()
         self.fail = fail
+        self.options = {}
+
+    def setsockopt(self, level, option, value):
+        self.options[(level, option)] = value
 
     def connect(self, address):
         if self.fail:
@@ -171,6 +175,8 @@ def fake_network(monkeypatch):
 
     socket = SimpleNamespace(
         SOCK_STREAM=1,
+        IPPROTO_TCP=6,
+        TCP_NODELAY=1,
         getaddrinfo=lambda host, port, *_: wrapped.get(
             "addresses", [(2, 1, 0, "", (host, port))]
         ),
@@ -206,6 +212,7 @@ def test_open_connection_verifies_tls_certificate_and_hostname(fake_network):
     )
     client = open_connection(settings)
     assert sockets[0].address == ("broker", 8883)
+    assert sockets[0].options == {(6, 1): 1}
     assert wrapped == {
         "cafile": "broker-ca.pem",
         "verify_mode": 2,

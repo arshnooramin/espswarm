@@ -11,7 +11,7 @@ class Pin:
     IRQ_RISING = 1
     IRQ_FALLING = 2
 
-    def __init__(self, number, mode, pull=None, value=0):
+    def __init__(self, number, mode=None, pull=None, value=0):
         self.number = number
         self.mode = mode
         self.pull = pull
@@ -24,8 +24,9 @@ class Pin:
             self.level = level
         return self.level
 
-    def irq(self, handler=None, trigger=0, hard=False):
-        self.irq_calls.append((handler, trigger, hard))
+    def irq(self, handler=None, trigger=0, wake=None):
+        # Same keywords as the ESP32 port's Pin.irq; it has no `hard` mode.
+        self.irq_calls.append((handler, trigger))
         self.handler = handler
 
     def fire(self, level):

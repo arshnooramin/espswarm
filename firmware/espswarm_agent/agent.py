@@ -105,6 +105,10 @@ class ConnectionSupervisor:
 
     def connect_wifi(self):
         self.wlan.active(True)
+        # Modem sleep adds up to ~300 ms to every round trip, and the agent
+        # stays connected anyway, so keep the radio awake.
+        if hasattr(self.wlan, "PM_NONE"):
+            self.wlan.config(pm=self.wlan.PM_NONE)
         if self.wlan.isconnected():
             return
         self.wlan.connect(self.settings.wifi_ssid, self.settings.wifi_password)
@@ -146,21 +150,26 @@ class ConnectionSupervisor:
         self.backoff = min(self.backoff * BACKOFF_MULTIPLIER, MAX_BACKOFF_MS)
 
 
-def run(settings):
+def run(settings, target):
     import binascii
     import os
 
+    import esp32
     import machine
+    import neopixel
     import network
 
     from .gpio import GPIO
+    from .pixels import NeoPixel
 
     wlan = network.WLAN(network.WLAN.IF_STA)
     # The interface must be active before its MAC address can be read.
     wlan.active(True)
     identity = settings.board_id or binascii.hexlify(wlan.config("mac")).decode()
     session = binascii.hexlify(os.urandom(SESSION_RANDOM_BYTES)).decode()
-    gpio = GPIO(machine)
-    agent = Agent(Protocol(identity, session, [gpio]), gpio.events, settings)
-    logger.info("Starting board: %s", identity)
+    gpio = GPIO(machine, target)
+    peripherals = [gpio, NeoPixel(machine, neopixel, target, esp32)]
+    protocol = Protocol(identity, session, peripherals, target=target.name)
+    agent = Agent(protocol, gpio.events, settings)
+    logger.info("Starting board %s on %s", identity, target.name)
     ConnectionSupervisor(settings, wlan, agent).run()
